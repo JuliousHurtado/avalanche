@@ -58,6 +58,10 @@ class CumulativeAccuracy(Metric[Dict[int, float]]):
             raise ValueError("Size mismatch for true_y " 
                              "and predicted_y tensors")
         for t, classes in classes_splits.items():
+            # This is to fix a weird bug 
+            # that was happening in some workflows
+            if t not in self._mean_accuracy:
+                self._mean_accuracy[t]
 
             # Only compute Accuracy for classes that are in classes set
             if len(set(true_y.cpu().numpy()).intersection(classes)) == 0:
@@ -122,22 +126,19 @@ class CumulativeAccuracyPluginMetric(
     def before_training_exp(self, strategy, **kwargs):
         super().before_training_exp(strategy, **kwargs)
         if isinstance(strategy.experience, OnlineCLExperience):
-            if strategy.experience.access_task_boundaries:
-                new_classes = set(
-                    strategy.experience.
+            new_classes = set(
+                strategy.experience.logging().
+                origin_experience.
+                classes_in_this_experience
+            )
+
+            task_id = (
+                    strategy.
+                    experience.
+                    logging().
                     origin_experience.
-                    classes_in_this_experience
-                )
-                task_id = (strategy.experience.
-                           origin_experience.
-                           current_experience)
-            else:
-                raise AttributeError(
-                    "Online Scenario has to allow "
-                    "access to task boundaries for"
-                    " the Cumulative Accuracy Metric"
-                    " to be computed"
-                )
+                    current_experience
+                    )
         else:
             new_classes = set(strategy.experience.classes_in_this_experience)
             task_id = strategy.experience.current_experience

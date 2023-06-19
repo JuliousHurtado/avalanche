@@ -243,11 +243,11 @@ def find_common_transforms_group(
     for d_set in datasets:
         if isinstance(d_set, AvalancheDataset):
             if uniform_group is None:
-                uniform_group = d_set._transform_groups.current_group
+                uniform_group = d_set._flat_data._transform_groups.current_group
             else:
                 if (
                     uniform_group
-                    != d_set._transform_groups.current_group
+                    != d_set._flat_data._transform_groups.current_group
                 ):
                     uniform_group = None
                     break
@@ -392,7 +392,13 @@ def _init_task_labels(dataset, task_labels, check_shape=True) -> \
                 "number of patterns in the dataset. Got {}, expected "
                 "{}!".format(len(task_labels), len(dataset))
             )
-        tls = SubSequence(task_labels, converter=int)
+
+        if isinstance(task_labels, ConstantSequence):
+            tls = task_labels
+        elif isinstance(task_labels, DataAttribute):
+            tls = task_labels.data
+        else:
+            tls = SubSequence(task_labels, converter=int)
     else:
         task_labels = _traverse_supported_dataset(
             dataset, _select_task_labels
@@ -400,6 +406,12 @@ def _init_task_labels(dataset, task_labels, check_shape=True) -> \
 
         if task_labels is None:
             tls = None
+        elif isinstance(task_labels, ConstantSequence):
+            tls = task_labels
+        elif isinstance(task_labels, DataAttribute):
+            return DataAttribute(
+                task_labels.data, "targets_task_labels",
+                use_in_getitem=True)
         else:
             tls = SubSequence(task_labels, converter=int)
 
@@ -482,9 +494,10 @@ def _init_transform_groups(
         # use 'train' as the initial transform group
         if (
             isinstance(dataset, AvalancheDataset)
-            and dataset._transform_groups is not None
+            and dataset._flat_data._transform_groups is not None
         ):
-            initial_transform_group = dataset._transform_groups.current_group
+            tgs = dataset._flat_data._transform_groups
+            initial_transform_group = tgs.current_group
         else:
             initial_transform_group = "train"
 
